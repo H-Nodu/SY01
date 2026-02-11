@@ -48,23 +48,53 @@
                 <span class="progress-pct" id="progress-pct">0%</span>
             </div>
 
-            <div class="menu-cards">
-                <button class="menu-card" id="btn-all" onclick="startMode('all')">
-                    <div class="menu-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                            <rect x="3" y="5" width="26" height="22" rx="3" stroke="currentColor" stroke-width="2"/>
-                            <path d="M3 12h26" stroke="currentColor" stroke-width="2"/>
-                            <circle cx="8" cy="8.5" r="1.5" fill="currentColor"/>
-                            <circle cx="13" cy="8.5" r="1.5" fill="currentColor"/>
-                        </svg>
-                    </div>
-                    <div class="menu-card-text">
-                        <span class="menu-card-title">全問モード</span>
-                        <span class="menu-card-sub">711問すべてをランダムに出題</span>
-                    </div>
-                    <div class="menu-card-count" id="count-all">711問</div>
-                </button>
+            <button class="resume-card" id="resume-card" onclick="resumeSession()" style="display:none;">
+                <div class="resume-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <polygon points="8,5 20,12 8,19" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="resume-text">
+                    <span class="resume-title">前回の続きから</span>
+                    <span class="resume-detail">
+                        <span id="resume-mode"></span> ・ <span id="resume-question"></span> ・ <span id="resume-time"></span>
+                    </span>
+                </div>
+            </button>
 
+            <div class="menu-cards">
+                <div class="menu-group-label">全問モード</div>
+                <div class="menu-group">
+                    <button class="menu-card" id="btn-all-random" onclick="startMode('all', 'random')">
+                        <div class="menu-card-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <path d="M5 10h6l5 6-5 6H5M27 10h-6l-2.5 3M18 22h9M27 10l-3-3m3 3l-3 3M27 22l-3-3m3 3l-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="menu-card-text">
+                            <span class="menu-card-title">ランダム</span>
+                            <span class="menu-card-sub">シャッフルして出題</span>
+                        </div>
+                        <div class="menu-card-count" id="count-all">711問</div>
+                    </button>
+                    <button class="menu-card" id="btn-all-sequential" onclick="startMode('all', 'sequential')">
+                        <div class="menu-card-icon">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <rect x="3" y="5" width="26" height="22" rx="3" stroke="currentColor" stroke-width="2"/>
+                                <path d="M3 12h26" stroke="currentColor" stroke-width="2"/>
+                                <circle cx="8" cy="8.5" r="1.5" fill="currentColor"/>
+                                <circle cx="13" cy="8.5" r="1.5" fill="currentColor"/>
+                            </svg>
+                        </div>
+                        <div class="menu-card-text">
+                            <span class="menu-card-title">順番通り</span>
+                            <span class="menu-card-sub">問題番号の順に出題</span>
+                        </div>
+                        <div class="menu-card-count" id="count-all-seq">711問</div>
+                    </button>
+                </div>
+
+                <div class="menu-group-label" style="margin-top: 8px;">復習モード</div>
                 <button class="menu-card menu-card-accent" id="btn-mistakes" onclick="startMode('mistakes')">
                     <div class="menu-card-icon">
                         <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
@@ -79,13 +109,53 @@
                 </button>
             </div>
 
-            <button class="reset-btn" onclick="confirmReset()">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 8a6 6 0 0111.3-2.8M14 8a6 6 0 01-11.3 2.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                学習データをリセット
-            </button>
+            <div class="menu-cards">
+                <div class="menu-group-label">リファレンス</div>
+                <button class="menu-card menu-card-glossary" id="btn-glossary" onclick="showGlossary()">
+                    <div class="menu-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <path d="M6 4h16a2 2 0 012 2v20a2 2 0 01-2 2H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M6 4v24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M6 4c0 0 2-1 4-1s4 1 4 1" stroke="currentColor" stroke-width="2"/>
+                            <path d="M10 12h8M10 16h6M10 20h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="menu-card-text">
+                        <span class="menu-card-title">用語集</span>
+                        <span class="menu-card-sub">頻出セキュリティ用語の辞書</span>
+                    </div>
+                    <div class="menu-card-count" id="count-glossary">0語</div>
+                </button>
+            </div>
+
+            <div class="memo-section">
+                <label class="memo-label">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 2h10v10H2z" stroke="currentColor" stroke-width="1.2"/>
+                        <path d="M4 5h6M4 7h4M4 9h5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+                    </svg>
+                    学習メモ
+                </label>
+                <textarea id="memo-input" class="memo-input" rows="3" placeholder="覚えておきたいこと、次回やること..." oninput="saveMemo()"></textarea>
+            </div>
+
+            <div class="home-footer-actions">
+                <button class="reset-btn" onclick="showApiSettings()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    AI設定
+                    <span class="api-status-dot" id="api-status-dot"></span>
+                </button>
+                <button class="reset-btn" onclick="confirmReset()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 8a6 6 0 0111.3-2.8M14 8a6 6 0 01-11.3 2.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M14 2v4h-4M2 14v-4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    学習データをリセット
+                </button>
+            </div>
         </div>
     </div>
 
@@ -102,11 +172,24 @@
                 <span id="card-counter">1 / 711</span>
                 <span id="card-mode-label" class="mode-badge">全問モード</span>
             </div>
-            <button class="shuffle-btn" onclick="shuffleDeck()" title="シャッフル">
+            <button class="shuffle-btn" id="btn-shuffle" onclick="shuffleDeck()" title="シャッフル">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                     <path d="M3 6h4l3 4-3 4H3M17 6h-4l-1.5 2M12 14h5M17 6l-2-2m2 2l-2 2M17 14l-2-2m2 2l-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </button>
+            <button class="shuffle-btn" id="btn-jump" onclick="showJumpInput()" title="問題番号にジャンプ" style="display:none;">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M4 10h12M13 6l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="6" cy="10" r="1.5" fill="currentColor"/>
+                </svg>
+            </button>
+            <div class="jump-popover" id="jump-popover">
+                <label class="jump-label">問題番号を入力</label>
+                <div class="jump-input-row">
+                    <input type="number" id="jump-input" class="jump-input" min="1" max="711" placeholder="1〜711">
+                    <button class="jump-go-btn" onclick="jumpToQuestion()">移動</button>
+                </div>
+            </div>
         </div>
 
         <div class="card-mini-progress">
@@ -127,6 +210,24 @@
                     <div class="card-answer" id="card-answer"></div>
                     <div class="card-explanation" id="card-explanation"></div>
                     <div class="card-incorrect" id="card-incorrect"></div>
+                    <div class="ai-explain-section" id="ai-explain-section">
+                        <button class="ai-explain-btn" id="ai-explain-btn" onclick="requestAiExplanation(event)">
+                            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                                <path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.2 4.2l1.4 1.4M12.4 12.4l1.4 1.4M4.2 13.8l1.4-1.4M12.4 5.6l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <circle cx="9" cy="9" r="3" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                            AIで詳しく解説
+                        </button>
+                        <div class="ai-explain-response" id="ai-explain-response" style="display:none;">
+                            <h4>AI解説</h4>
+                            <div class="ai-explain-text" id="ai-explain-text"></div>
+                        </div>
+                        <div class="ai-explain-loading" id="ai-explain-loading" style="display:none;">
+                            <div class="ai-loading-spinner"></div>
+                            <span>AIが解説を生成中...</span>
+                        </div>
+                        <div class="ai-explain-error" id="ai-explain-error" style="display:none;"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -171,6 +272,35 @@
         </div>
     </div>
 
+    <!-- API SETTINGS MODAL -->
+    <div id="api-modal-overlay" class="modal-overlay" onclick="closeApiSettings()">
+        <div class="modal modal-wide" onclick="event.stopPropagation()">
+            <h3>AI解説の設定</h3>
+            <p class="api-modal-desc">Google Gemini APIキーを入力すると、カード裏面で「AIで詳しく解説」機能が使えます。</p>
+            <div class="api-key-input-row">
+                <input type="password" id="api-key-input" class="api-key-input" placeholder="Gemini APIキーを入力">
+                <button class="api-key-toggle" onclick="toggleApiKeyVisibility()" title="表示/非表示">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M1 9s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="api-model-row">
+                <label class="api-model-label">モデル</label>
+                <select id="api-model-select" class="api-model-select"></select>
+            </div>
+            <p class="api-help-text">
+                APIキーは <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料取得できます。キーはこの端末のみに保存されます。<br>
+                ※ 無料枠エラーが出る場合はモデルを変更してみてください。
+            </p>
+            <div class="modal-actions">
+                <button class="modal-btn modal-cancel" onclick="closeApiSettings()">キャンセル</button>
+                <button class="modal-btn modal-confirm api-save-btn" onclick="saveApiKey()">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- COMPLETION SCREEN -->
     <div id="complete-screen" class="screen">
         <div class="complete-container">
@@ -195,7 +325,41 @@
         </div>
     </div>
 
+    <!-- GLOSSARY SCREEN -->
+    <div id="glossary-screen" class="screen">
+        <div class="glossary-container">
+            <div class="glossary-header">
+                <button class="back-btn" onclick="goHome()">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    ホーム
+                </button>
+                <h2 class="glossary-title">用語集</h2>
+                <span class="glossary-count" id="glossary-result-count"></span>
+            </div>
+
+            <div class="glossary-search-bar">
+                <svg class="glossary-search-icon" width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M12 12l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <input type="text" id="glossary-search" class="glossary-search-input" placeholder="用語を検索..." oninput="filterGlossary()">
+                <button class="glossary-search-clear" id="glossary-search-clear" onclick="clearGlossarySearch()" style="display:none;">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="glossary-categories" id="glossary-categories"></div>
+
+            <div class="glossary-list" id="glossary-list"></div>
+        </div>
+    </div>
+
     <script src="data.js"></script>
+    <script src="glossary.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
