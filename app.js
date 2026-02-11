@@ -12,6 +12,7 @@ const LS_GEMINI_KEY = 'sy0701_gemini_key';
 const LS_GEMINI_MODEL = 'sy0701_gemini_model';
 const LS_LAST_SESSION = 'sy0701_last_session';
 const LS_MEMO = 'sy0701_memo';
+const LS_HISTORY = 'sy0701_history';
 
 // ===== DATA ACCESS =====
 function getMastered() {
@@ -32,6 +33,27 @@ function getMistakes() {
 
 function setMistakes(arr) {
     localStorage.setItem(LS_MISTAKES, JSON.stringify(arr));
+}
+
+function getHistory() {
+    try {
+        return JSON.parse(localStorage.getItem(LS_HISTORY) || '{}');
+    } catch { return {}; }
+}
+
+function setHistory(obj) {
+    localStorage.setItem(LS_HISTORY, JSON.stringify(obj));
+}
+
+function recordResult(qNum, result) {
+    const history = getHistory();
+    if (!history[qNum]) {
+        history[qNum] = { correct: 0, incorrect: 0, last: null, lastDate: null };
+    }
+    history[qNum][result]++;
+    history[qNum].last = result;
+    history[qNum].lastDate = Date.now();
+    setHistory(history);
 }
 
 // ===== INIT =====
@@ -58,6 +80,16 @@ function updateHomeStats() {
     const pct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
     document.getElementById('progress-fill').style.width = pct + '%';
     document.getElementById('progress-pct').textContent = pct + '%';
+
+    // Accuracy from history
+    const history = getHistory();
+    let totalCorrect = 0, totalAttempts = 0;
+    Object.values(history).forEach(h => {
+        totalCorrect += h.correct;
+        totalAttempts += h.correct + h.incorrect;
+    });
+    document.getElementById('stat-accuracy').textContent =
+        totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) + '%' : '-';
 
     // Update menu counts
     document.getElementById('count-all').textContent = total + '問';
@@ -217,6 +249,22 @@ function renderCard() {
     document.getElementById('card-q-number').textContent = `QUESTION ${qNum}`;
     document.getElementById('card-q-text').textContent = q.question;
 
+    // History badge
+    const historyBadge = document.getElementById('card-history-badge');
+    const hist = getHistory()[q.num];
+    if (hist && hist.last) {
+        const isCorrect = hist.last === 'correct';
+        const total = hist.correct + hist.incorrect;
+        historyBadge.className = 'card-history-badge ' + (isCorrect ? 'badge-correct' : 'badge-incorrect');
+        historyBadge.innerHTML =
+            `<span class="badge-icon">${isCorrect ? '○' : '×'}</span>` +
+            `<span class="badge-label">前回 ${isCorrect ? '正解' : '不正解'}</span>` +
+            (total > 1 ? `<span class="badge-stats">${hist.correct}正解 / ${hist.incorrect}不正解</span>` : '');
+        historyBadge.style.display = '';
+    } else {
+        historyBadge.style.display = 'none';
+    }
+
     // Choices
     const choicesEl = document.getElementById('card-choices');
     choicesEl.innerHTML = '';
@@ -288,21 +336,13 @@ function renderCard() {
 
 function updateActionButtons(qNum) {
     const mistakes = getMistakes();
-    const mastered = getMastered();
 
     const mistakeBtn = document.getElementById('btn-mark-mistake');
-    const masteredBtn = document.getElementById('btn-mastered');
 
     if (mistakes.includes(qNum)) {
         mistakeBtn.classList.add('active');
     } else {
         mistakeBtn.classList.remove('active');
-    }
-
-    if (mastered.includes(qNum)) {
-        masteredBtn.classList.add('active');
-    } else {
-        masteredBtn.classList.remove('active');
     }
 }
 
@@ -340,6 +380,8 @@ function markMistake() {
         // Add to mistakes
         mistakes.push(q.num);
         setMistakes(mistakes);
+        recordResult(q.num, 'incorrect');
+        showToast('不正解を記録しました');
     }
 
     updateActionButtons(q.num);
@@ -354,6 +396,9 @@ function markMastered() {
         setMastered(mastered.filter(n => n !== q.num));
         updateActionButtons(q.num);
     } else {
+        // Record as correct
+        recordResult(q.num, 'correct');
+
         // Mark as mastered & remove from deck
         mastered.push(q.num);
         setMastered(mastered);
@@ -376,6 +421,20 @@ function markMastered() {
         renderCard();
         showToast('覚えた！ デッキから除外しました');
     }
+}
+
+function markCorrect() {
+    const q = QUESTIONS[deck[deckIndex]];
+    recordResult(q.num, 'correct');
+
+    // Remove from mistakes if present
+    const mistakes = getMistakes();
+    if (mistakes.includes(q.num)) {
+        setMistakes(mistakes.filter(n => n !== q.num));
+    }
+
+    updateActionButtons(q.num);
+    showToast('正解を記録しました');
 }
 
 // ===== COMPLETE SCREEN =====
@@ -401,6 +460,7 @@ function confirmReset() {
     document.getElementById('modal-confirm-btn').onclick = () => {
         localStorage.removeItem(LS_MASTERED);
         localStorage.removeItem(LS_MISTAKES);
+        localStorage.removeItem(LS_HISTORY);
         updateHomeStats();
         closeModal();
         showToast('リセットしました');
@@ -804,26 +864,45 @@ ${q.answer}
 
     try {
         const apiUrl = getGeminiApiUrl();
-        const res = await fetch(`${apiUrl}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.3,
-                    maxOutputTokens: 2048
-                }
-            })
-        });
+        const maxRetries = 3;
+        let lastError = null;
+        let aiText = null;
 
-        if (!res.ok) {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            if (attempt > 0) {
+                const waitSec = attempt * 3;
+                loading.querySelector('span').textContent = `レート制限中...${waitSec}秒後にリトライ (${attempt + 1}/${maxRetries})`;
+                await new Promise(r => setTimeout(r, waitSec * 1000));
+                loading.querySelector('span').textContent = `AIが解説を生成中... (リトライ ${attempt + 1}/${maxRetries})`;
+            }
+
+            const res = await fetch(`${apiUrl}?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.3,
+                        maxOutputTokens: 2048
+                    }
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                break;
+            }
+
             const errData = await res.json().catch(() => ({}));
             const errMsg = errData?.error?.message || `HTTP ${res.status}`;
 
-            // Detect quota error and show friendly message
+            // Retryable: 429 rate limit
             if (res.status === 429 || errMsg.includes('quota') || errMsg.includes('Quota')) {
-                throw new Error('QUOTA');
+                lastError = 'QUOTA';
+                continue;
             }
+            // Non-retryable errors
             if (res.status === 400 && errMsg.includes('API key')) {
                 throw new Error('APIキーが無効です。AI設定で正しいキーを入力してください。');
             }
@@ -836,8 +915,9 @@ ${q.answer}
             throw new Error(errMsg);
         }
 
-        const data = await res.json();
-        const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!aiText && lastError === 'QUOTA') {
+            throw new Error('QUOTA');
+        }
 
         if (!aiText) {
             throw new Error('AIからの応答が空でした');
@@ -848,17 +928,20 @@ ${q.answer}
         response.style.display = 'block';
     } catch (err) {
         loading.style.display = 'none';
+        loading.querySelector('span').textContent = 'AIが解説を生成中...';
         btn.style.display = '';
 
         if (err.message === 'QUOTA') {
             const model = getGeminiModel();
             errorEl.innerHTML =
-                `<strong>無料枠の制限に達しました</strong><br>` +
+                `<strong>無料枠の制限に達しました（3回リトライ済み）</strong><br>` +
                 `現在のモデル: ${escapeHtml(model)}<br><br>` +
-                `対処法:<br>` +
-                `・少し時間をおいて再試行する<br>` +
-                `・AI設定で別のモデルに切り替える<br>` +
-                `・<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">Google AI Studio</a> でAPIキーを再作成する`;
+                `<button onclick="this.parentElement.style.display='none';requestAiExplanation()" ` +
+                `style="padding:8px 16px;margin:8px 0;border-radius:8px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:0.85rem;">` +
+                `もう一度試す</button><br>` +
+                `それでもダメな場合:<br>` +
+                `・30秒ほど待ってから再試行<br>` +
+                `・AI設定で別のモデルに切り替える`;
         } else if (err.message === 'MODEL_NOT_FOUND') {
             const model = getGeminiModel();
             errorEl.innerHTML =

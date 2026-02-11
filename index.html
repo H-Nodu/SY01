@@ -39,6 +39,11 @@
                     <span class="stat-num" id="stat-remaining">711</span>
                     <span class="stat-label">残り</span>
                 </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-num" id="stat-accuracy">-</span>
+                    <span class="stat-label">正答率</span>
+                </div>
             </div>
 
             <div class="progress-container">
@@ -201,6 +206,7 @@
                 <!-- FRONT -->
                 <div class="card-face card-front">
                     <div class="card-q-number" id="card-q-number">QUESTION 001</div>
+                    <div class="card-history-badge" id="card-history-badge" style="display:none;"></div>
                     <div class="card-q-text" id="card-q-text"></div>
                     <div class="card-choices" id="card-choices"></div>
                     <div class="card-flip-hint">タップして回答を表示</div>
@@ -238,7 +244,14 @@
                     <circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="2"/>
                     <path d="M8 8l6 6M14 8l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
-                <span>もう一度</span>
+                <span>不正解</span>
+            </button>
+            <button class="action-btn action-correct" id="btn-mark-correct" onclick="markCorrect()">
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                    <circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="2"/>
+                    <path d="M7 11l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>正解</span>
             </button>
             <button class="action-btn action-prev" onclick="prevCard()">
                 <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
@@ -249,13 +262,6 @@
                 <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
                     <path d="M8 5l7 6-7 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-            </button>
-            <button class="action-btn action-mastered" id="btn-mastered" onclick="markMastered()">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="2"/>
-                    <path d="M7 11l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span>覚えた</span>
             </button>
         </div>
     </div>
