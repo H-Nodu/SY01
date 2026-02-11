@@ -636,8 +636,8 @@ function initMemo() {
 
 // ===== AI EXPLANATION =====
 const GEMINI_MODELS = [
-    { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite（推奨・最軽量）' },
-    { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash（安定）' },
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite（推奨・最新）' },
+    { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite（軽量）' },
     { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash（高性能）' },
 ];
 
@@ -697,6 +697,56 @@ function saveApiKey() {
     updateApiStatusDot();
     closeApiSettings();
     showToast(key ? '設定を保存しました' : 'APIキーを削除しました');
+}
+
+async function testApiConnection() {
+    const key = document.getElementById('api-key-input').value.trim();
+    const model = document.getElementById('api-model-select').value;
+    const resultEl = document.getElementById('api-test-result');
+    const btn = document.getElementById('api-test-btn');
+
+    if (!key) {
+        resultEl.className = 'api-test-result error';
+        resultEl.textContent = 'APIキーを入力してください';
+        resultEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'テスト中...';
+    resultEl.style.display = 'none';
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: 'テスト。「OK」とだけ返してください。' }] }],
+                generationConfig: { maxOutputTokens: 10 }
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '(応答あり)';
+            resultEl.className = 'api-test-result success';
+            resultEl.textContent = `接続成功！ モデル: ${model} ／応答: ${text.substring(0, 50)}`;
+        } else {
+            const errMsg = data?.error?.message || `HTTP ${res.status}`;
+            resultEl.className = 'api-test-result error';
+            resultEl.innerHTML = `<strong>エラー (${res.status}):</strong> ${escapeHtml(errMsg)}`;
+        }
+    } catch (err) {
+        resultEl.className = 'api-test-result error';
+        resultEl.textContent = `通信エラー: ${err.message}`;
+    }
+
+    resultEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '接続テスト';
 }
 
 function updateApiStatusDot() {
@@ -777,6 +827,12 @@ ${q.answer}
             if (res.status === 400 && errMsg.includes('API key')) {
                 throw new Error('APIキーが無効です。AI設定で正しいキーを入力してください。');
             }
+            if (res.status === 404) {
+                throw new Error('MODEL_NOT_FOUND');
+            }
+            if (res.status === 403) {
+                throw new Error('API_KEY_INVALID');
+            }
             throw new Error(errMsg);
         }
 
@@ -802,7 +858,17 @@ ${q.answer}
                 `対処法:<br>` +
                 `・少し時間をおいて再試行する<br>` +
                 `・AI設定で別のモデルに切り替える<br>` +
-                `・<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">Google AI Studio</a> で課金設定を有効にする`;
+                `・<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">Google AI Studio</a> でAPIキーを再作成する`;
+        } else if (err.message === 'MODEL_NOT_FOUND') {
+            const model = getGeminiModel();
+            errorEl.innerHTML =
+                `<strong>モデルが見つかりません</strong><br>` +
+                `現在のモデル: ${escapeHtml(model)}<br><br>` +
+                `AI設定で別のモデルに切り替えてください。`;
+        } else if (err.message === 'API_KEY_INVALID') {
+            errorEl.innerHTML =
+                `<strong>APIキーが無効または失効しています</strong><br><br>` +
+                `<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">Google AI Studio</a> で新しいAPIキーを作成し、AI設定に入力してください。`;
         } else if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
             const isFileProtocol = location.protocol === 'file:';
             errorEl.innerHTML = isFileProtocol

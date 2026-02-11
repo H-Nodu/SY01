@@ -290,6 +290,8 @@
                 <label class="api-model-label">モデル</label>
                 <select id="api-model-select" class="api-model-select"></select>
             </div>
+            <div id="api-test-result" class="api-test-result" style="display:none;"></div>
+            <button class="modal-btn api-test-btn" id="api-test-btn" onclick="testApiConnection()">接続テスト</button>
             <p class="api-help-text">
                 APIキーは <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料取得できます。キーはこの端末のみに保存されます。<br>
                 ※ 無料枠エラーが出る場合はモデルを変更してみてください。
