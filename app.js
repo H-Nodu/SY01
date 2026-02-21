@@ -48,7 +48,11 @@ function setHistory(obj) {
 function recordResult(qNum, result) {
     const history = getHistory();
     if (!history[qNum]) {
-        history[qNum] = { correct: 0, incorrect: 0, last: null, lastDate: null };
+        history[qNum] = { correct: 0, incorrect: 0, unsure: 0, last: null, lastDate: null };
+    }
+    // Backward compatibility: ensure unsure counter exists
+    if (history[qNum].unsure === undefined) {
+        history[qNum].unsure = 0;
     }
     history[qNum][result]++;
     history[qNum].last = result;
@@ -86,7 +90,7 @@ function updateHomeStats() {
     let totalCorrect = 0, totalAttempts = 0;
     Object.values(history).forEach(h => {
         totalCorrect += h.correct;
-        totalAttempts += h.correct + h.incorrect;
+        totalAttempts += h.correct + h.incorrect + (h.unsure || 0);
     });
     document.getElementById('stat-accuracy').textContent =
         totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) + '%' : '-';
@@ -254,12 +258,33 @@ function renderCard() {
     const hist = getHistory()[q.num];
     if (hist && hist.last) {
         const isCorrect = hist.last === 'correct';
-        const total = hist.correct + hist.incorrect;
-        historyBadge.className = 'card-history-badge ' + (isCorrect ? 'badge-correct' : 'badge-incorrect');
+        const isUnsure = hist.last === 'unsure';
+        const total = hist.correct + hist.incorrect + (hist.unsure || 0);
+        let badgeClass, badgeIcon, badgeLabel;
+        if (isCorrect) {
+            badgeClass = 'badge-correct';
+            badgeIcon = '○';
+            badgeLabel = '前回 正解';
+        } else if (isUnsure) {
+            badgeClass = 'badge-unsure';
+            badgeIcon = '△';
+            badgeLabel = '前回 微妙';
+        } else {
+            badgeClass = 'badge-incorrect';
+            badgeIcon = '×';
+            badgeLabel = '前回 不正解';
+        }
+        historyBadge.className = 'card-history-badge ' + badgeClass;
+        let statsText = '';
+        if (total > 1) {
+            statsText = `${hist.correct}正解`;
+            if (hist.unsure) statsText += ` / ${hist.unsure}微妙`;
+            statsText += ` / ${hist.incorrect}不正解`;
+        }
         historyBadge.innerHTML =
-            `<span class="badge-icon">${isCorrect ? '○' : '×'}</span>` +
-            `<span class="badge-label">前回 ${isCorrect ? '正解' : '不正解'}</span>` +
-            (total > 1 ? `<span class="badge-stats">${hist.correct}正解 / ${hist.incorrect}不正解</span>` : '');
+            `<span class="badge-icon">${badgeIcon}</span>` +
+            `<span class="badge-label">${badgeLabel}</span>` +
+            (statsText ? `<span class="badge-stats">${statsText}</span>` : '');
         historyBadge.style.display = '';
     } else {
         historyBadge.style.display = 'none';
@@ -321,11 +346,39 @@ function renderCard() {
         incorrectEl.innerHTML = '';
     }
 
-    // Reset AI explanation
-    document.getElementById('ai-explain-btn').style.display = getApiKey() ? '' : 'none';
-    document.getElementById('ai-explain-response').style.display = 'none';
+    // Detailed explanation (pre-generated or AI)
+    const aiResponse = document.getElementById('ai-explain-response');
+    const aiText = document.getElementById('ai-explain-text');
+    const aiBtn = document.getElementById('ai-explain-btn');
     document.getElementById('ai-explain-loading').style.display = 'none';
     document.getElementById('ai-explain-error').style.display = 'none';
+
+    // Reset followup section
+    const followupSection = document.getElementById('ai-followup-section');
+    const followupInput = document.getElementById('ai-followup-input');
+    const followupResponse = document.getElementById('ai-followup-response');
+    const followupLoading = document.getElementById('ai-followup-loading');
+    const followupError = document.getElementById('ai-followup-error');
+    followupSection.style.display = 'none';
+    followupInput.value = '';
+    followupResponse.style.display = 'none';
+    followupResponse.innerHTML = '';
+    followupLoading.style.display = 'none';
+    followupError.style.display = 'none';
+
+    if (q.detailed_explanation) {
+        // 事前生成済みの詳細解説を表示
+        aiText.innerHTML = formatAiResponse(q.detailed_explanation);
+        aiResponse.style.display = 'block';
+        // Show followup section if API key is set
+        if (getApiKey()) {
+            followupSection.style.display = '';
+        }
+    } else {
+        aiResponse.style.display = 'none';
+    }
+    // AIボタンは常に表示（APIキーがあれば）
+    aiBtn.style.display = getApiKey() ? '' : 'none';
 
     // Auto-save session progress
     saveSession();
@@ -336,13 +389,21 @@ function renderCard() {
 
 function updateActionButtons(qNum) {
     const mistakes = getMistakes();
+    const hist = getHistory()[qNum];
 
     const mistakeBtn = document.getElementById('btn-mark-mistake');
+    const unsureBtn = document.getElementById('btn-mark-unsure');
 
     if (mistakes.includes(qNum)) {
         mistakeBtn.classList.add('active');
     } else {
         mistakeBtn.classList.remove('active');
+    }
+
+    if (hist && hist.last === 'unsure') {
+        unsureBtn.classList.add('active');
+    } else {
+        unsureBtn.classList.remove('active');
     }
 }
 
@@ -437,6 +498,21 @@ function markCorrect() {
     showToast('正解を記録しました');
 }
 
+function markUnsure() {
+    const q = QUESTIONS[deck[deckIndex]];
+    const mistakes = getMistakes();
+
+    // Add to mistakes (for review mode) if not already there
+    if (!mistakes.includes(q.num)) {
+        mistakes.push(q.num);
+        setMistakes(mistakes);
+    }
+
+    recordResult(q.num, 'unsure');
+    updateActionButtons(q.num);
+    showToast('微妙を記録しました');
+}
+
 // ===== COMPLETE SCREEN =====
 function showComplete() {
     const mastered = getMastered();
@@ -491,6 +567,12 @@ function setupKeyboard() {
             return;
         }
 
+        // Guard: ignore keyboard shortcuts when followup input is focused
+        const followupInput = document.getElementById('ai-followup-input');
+        if (document.activeElement === followupInput) {
+            return;
+        }
+
         switch (e.key) {
             case ' ':
             case 'Enter':
@@ -508,6 +590,9 @@ function setupKeyboard() {
             case 'x':
             case 'm':
                 markMistake();
+                break;
+            case 'u':
+                markUnsure();
                 break;
             case 'o':
             case 'k':
@@ -843,7 +928,7 @@ async function requestAiExplanation(event) {
     }
 
     const prompt = `あなたはCompTIA Security+ (SY0-701) の試験対策の専門家です。
-以下の問題について、初心者にもわかるように詳しく日本語で解説してください。
+以下の問題について、IT初心者でも理解できるように詳しく日本語で解説してください。
 
 【問題】
 ${q.question}
@@ -854,13 +939,28 @@ ${choicesText}
 【正解】
 ${q.answer}
 
-以下のポイントを含めて解説してください：
-1. なぜその答えが正解なのか（根拠と背景）
-2. 各不正解の選択肢が間違いである理由
-3. この問題に関連する重要な概念やキーワード
-4. 試験で覚えておくべきポイント
+以下の4セクション構成で解説してください。各セクションに見出し（##）をつけてください。
 
-わかりやすく、簡潔に解説してください。`;
+## 正解の解説
+- なぜこの答えが正解なのか、技術的な根拠と背景を詳しく説明
+- 具体的な使用例やシナリオがあれば含める
+
+## 不正解の選択肢の分析
+- 各不正解の選択肢について、それぞれなぜ不正解なのかを個別に説明
+- 正解の選択肢との違いを明確に
+- ひっかけポイントがあれば指摘
+
+## 関連する重要概念
+- この問題に関連するセキュリティの概念・用語・技術を説明
+- 関連する他の技術やプロトコルとの関係性
+- 実務での具体的な適用例
+
+## 試験対策のポイント
+- この問題で問われている知識の要点をまとめる
+- 類似問題が出た場合の判断基準
+- 覚えるべきキーワードや区別のコツ
+
+丁寧で分かりやすい解説をお願いします。`;
 
     try {
         const apiUrl = getGeminiApiUrl();
@@ -883,7 +983,7 @@ ${q.answer}
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: {
                         temperature: 0.3,
-                        maxOutputTokens: 2048
+                        maxOutputTokens: 4096
                     }
                 })
             });
@@ -926,6 +1026,11 @@ ${q.answer}
         loading.style.display = 'none';
         textEl.innerHTML = formatAiResponse(aiText);
         response.style.display = 'block';
+
+        // Show followup section
+        if (getApiKey()) {
+            document.getElementById('ai-followup-section').style.display = '';
+        }
     } catch (err) {
         loading.style.display = 'none';
         loading.querySelector('span').textContent = 'AIが解説を生成中...';
@@ -986,6 +1091,101 @@ function formatAiResponse(text) {
         .replace(/\n/g, '<br>')
         .replace(/^/, '<p>')
         .replace(/$/, '</p>');
+}
+
+// ===== FOLLOWUP QUESTION =====
+async function sendFollowupQuestion(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    const input = document.getElementById('ai-followup-input');
+    const sendBtn = document.getElementById('ai-followup-send-btn');
+    const loadingEl = document.getElementById('ai-followup-loading');
+    const responseEl = document.getElementById('ai-followup-response');
+    const errorEl = document.getElementById('ai-followup-error');
+
+    const question = input.value.trim();
+    if (!question) return;
+
+    const apiKey = getApiKey();
+    if (!apiKey) {
+        showApiSettings();
+        return;
+    }
+
+    const q = QUESTIONS[deck[deckIndex]];
+
+    // Show loading
+    sendBtn.disabled = true;
+    loadingEl.style.display = 'flex';
+    errorEl.style.display = 'none';
+
+    // Build context
+    let choicesText = '';
+    if (q.choices && q.choices.length > 0) {
+        choicesText = q.choices.map(c => `${c.letter}. ${c.text}`).join('\n');
+    }
+
+    const prompt = `あなたはCompTIA Security+ (SY0-701) の試験対策の専門家です。
+以下の問題についてのフォローアップ質問に回答してください。
+
+【問題】
+${q.question}
+
+【選択肢】
+${choicesText}
+
+【正解】
+${q.answer}
+
+【解説】
+${q.explanation || ''}
+
+【ユーザーの質問】
+${question}
+
+IT初心者にもわかるように、丁寧に日本語で回答してください。`;
+
+    try {
+        const apiUrl = getGeminiApiUrl();
+        const res = await fetch(`${apiUrl}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 4096
+                }
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+            throw new Error(errMsg);
+        }
+
+        const data = await res.json();
+        const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!aiText) {
+            throw new Error('AIからの応答が空でした');
+        }
+
+        loadingEl.style.display = 'none';
+        responseEl.innerHTML = formatAiResponse(aiText);
+        responseEl.style.display = 'block';
+        input.value = '';
+    } catch (err) {
+        loadingEl.style.display = 'none';
+        errorEl.textContent = 'エラー: ' + err.message;
+        errorEl.style.display = 'block';
+    }
+
+    sendBtn.disabled = false;
 }
 
 // ===== GLOSSARY =====

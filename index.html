@@ -233,6 +233,21 @@
                             <span>AIが解説を生成中...</span>
                         </div>
                         <div class="ai-explain-error" id="ai-explain-error" style="display:none;"></div>
+                        <div class="ai-followup-section" id="ai-followup-section" style="display:none;" onclick="event.stopPropagation()">
+                            <div class="ai-followup-input-row">
+                                <input type="text" id="ai-followup-input" class="ai-followup-input"
+                                       placeholder="この問題について質問する..."
+                                       onkeydown="if(event.key==='Enter'){event.stopPropagation();sendFollowupQuestion(event);}">
+                                <button class="ai-followup-send-btn" id="ai-followup-send-btn"
+                                        onclick="sendFollowupQuestion(event)">送信</button>
+                            </div>
+                            <div class="ai-followup-loading" id="ai-followup-loading" style="display:none;">
+                                <div class="ai-loading-spinner"></div>
+                                <span>AIが回答を生成中...</span>
+                            </div>
+                            <div class="ai-followup-response" id="ai-followup-response" style="display:none;"></div>
+                            <div class="ai-followup-error" id="ai-followup-error" style="display:none;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -245,6 +260,14 @@
                     <path d="M8 8l6 6M14 8l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
                 <span>不正解</span>
+            </button>
+            <button class="action-btn action-unsure" id="btn-mark-unsure" onclick="markUnsure()">
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                    <circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="2"/>
+                    <path d="M8.5 8.5a2.5 2.5 0 014.6 1.3c0 1.7-2.6 2-2.6 3.7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="11" cy="16" r="1" fill="currentColor"/>
+                </svg>
+                <span>微妙</span>
             </button>
             <button class="action-btn action-correct" id="btn-mark-correct" onclick="markCorrect()">
                 <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
