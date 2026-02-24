@@ -1580,6 +1580,89 @@ body {
     padding: 48px 16px;
 }
 
+/* ===== ANSWER FLAG ===== */
+.card-answer-flag {
+    margin: 10px 0;
+    padding: 12px 14px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--orange);
+}
+
+.card-answer-flag strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+}
+
+.card-answer-flag p {
+    color: var(--text-dim);
+    margin: 0;
+}
+
+/* ===== STAT COLORS ===== */
+.stat-color-correct { color: var(--green); }
+.stat-color-unsure { color: var(--orange); }
+.stat-color-incorrect { color: var(--red); }
+
+/* ===== REVIEW FILTER ===== */
+.review-filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.review-filter-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    font-family: var(--font);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.5;
+}
+
+.review-filter-btn.active {
+    opacity: 1;
+    color: var(--text);
+}
+
+.review-filter-btn:first-child.active {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: var(--orange-soft);
+    color: var(--orange);
+}
+
+.review-filter-btn:last-child.active {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: var(--red-soft);
+    color: var(--red);
+}
+
+.review-filter-btn:hover {
+    opacity: 0.85;
+}
+
+.review-filter-icon {
+    font-weight: 700;
+}
+
+.review-filter-count {
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
 /* ===== KEYBOARD SHORTCUTS TOAST ===== */
 .toast {
     position: fixed;

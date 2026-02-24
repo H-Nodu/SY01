@@ -31,18 +31,18 @@
                 </div>
                 <div class="stat-divider"></div>
                 <div class="stat-item">
-                    <span class="stat-num" id="stat-mastered">0</span>
-                    <span class="stat-label">覚えた</span>
-                </div>
-                <div class="stat-divider"></div>
-                <div class="stat-item">
-                    <span class="stat-num" id="stat-remaining">711</span>
-                    <span class="stat-label">残り</span>
-                </div>
-                <div class="stat-divider"></div>
-                <div class="stat-item">
-                    <span class="stat-num" id="stat-accuracy">-</span>
+                    <span class="stat-num stat-color-correct" id="stat-accuracy">-</span>
                     <span class="stat-label">正答率</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-num stat-color-unsure" id="stat-unsure-rate">-</span>
+                    <span class="stat-label">微妙率</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-num stat-color-incorrect" id="stat-incorrect-rate">-</span>
+                    <span class="stat-label">不正解率</span>
                 </div>
             </div>
 
@@ -100,6 +100,14 @@
                 </div>
 
                 <div class="menu-group-label" style="margin-top: 8px;">復習モード</div>
+                <div class="review-filter-row" id="review-filter-row">
+                    <button class="review-filter-btn active" id="filter-unsure-btn" onclick="toggleReviewFilter('unsure')">
+                        <span class="review-filter-icon">△</span> 微妙 <span class="review-filter-count" id="count-filter-unsure">0</span>問
+                    </button>
+                    <button class="review-filter-btn active" id="filter-incorrect-btn" onclick="toggleReviewFilter('incorrect')">
+                        <span class="review-filter-icon">×</span> 不正解 <span class="review-filter-count" id="count-filter-incorrect">0</span>問
+                    </button>
+                </div>
                 <button class="menu-card menu-card-accent" id="btn-mistakes" onclick="startMode('mistakes')">
                     <div class="menu-card-icon">
                         <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
@@ -108,10 +116,42 @@
                     </div>
                     <div class="menu-card-text">
                         <span class="menu-card-title">復習モード</span>
-                        <span class="menu-card-sub">間違えた・覚えたい問題のみ</span>
+                        <span class="menu-card-sub">選択したフィルターの問題を出題</span>
                     </div>
                     <div class="menu-card-count" id="count-mistakes">0問</div>
                 </button>
+            </div>
+
+            <div class="menu-cards">
+                <div class="menu-group-label" style="margin-top: 8px;">バージョン差分 (V21.35 → V22.35)</div>
+                <div class="menu-group">
+                    <button class="menu-card" onclick="startDiffMode('v22_new', 'random')" style="border-left: 3px solid #10b981;">
+                        <div class="menu-card-icon" style="color: #10b981;">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="2"/>
+                                <path d="M16 11v10M11 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="menu-card-text">
+                            <span class="menu-card-title">V22 新規問題</span>
+                            <span class="menu-card-sub">V22で新たに追加された問題</span>
+                        </div>
+                        <div class="menu-card-count" id="count-v22-new">131問</div>
+                    </button>
+                    <button class="menu-card" onclick="startDiffMode('v21_only', 'random')" style="border-left: 3px solid #f59e0b;">
+                        <div class="menu-card-icon" style="color: #f59e0b;">
+                            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="2"/>
+                                <path d="M11 16h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="menu-card-text">
+                            <span class="menu-card-title">V21 削除問題</span>
+                            <span class="menu-card-sub">V22で削除されたV21の問題</span>
+                        </div>
+                        <div class="menu-card-count" id="count-v21-only">426問</div>
+                    </button>
+                </div>
             </div>
 
             <div class="menu-cards">
@@ -152,6 +192,20 @@
                     </svg>
                     AI設定
                     <span class="api-status-dot" id="api-status-dot"></span>
+                </button>
+                <button class="reset-btn" onclick="exportData()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    バックアップ保存
+                </button>
+                <button class="reset-btn" onclick="importData()">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 10V2M5 5l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    バックアップ復元
                 </button>
                 <button class="reset-btn" onclick="confirmReset()">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -214,6 +268,7 @@
                 <!-- BACK -->
                 <div class="card-face card-back">
                     <div class="card-answer" id="card-answer"></div>
+                    <div class="card-answer-flag" id="card-answer-flag" style="display:none;"></div>
                     <div class="card-explanation" id="card-explanation"></div>
                     <div class="card-incorrect" id="card-incorrect"></div>
                     <div class="ai-explain-section" id="ai-explain-section">
@@ -390,6 +445,9 @@
     </div>
 
     <script src="data.js"></script>
+    <script src="data_v22_new.js"></script>
+    <script src="data_v21_only.js"></script>
+    <script src="answer_flags.js"></script>
     <script src="glossary.js"></script>
     <script src="app.js"></script>
 </body>

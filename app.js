@@ -1,9 +1,11 @@
 // ===== STATE =====
-let currentMode = 'all';       // 'all' | 'mistakes'
+let currentMode = 'all';       // 'all' | 'mistakes' | 'v22_new' | 'v21_only'
 let orderMode = 'random';      // 'random' | 'sequential'
 let deck = [];                 // current set of question indices
 let deckIndex = 0;             // position in deck
 let isFlipped = false;
+let activeQuestions = null;    // reference to current question set (null = QUESTIONS)
+let reviewFilter = { unsure: true, incorrect: true };
 
 // LocalStorage keys
 const LS_MASTERED = 'sy0701_mastered';
@@ -60,6 +62,44 @@ function recordResult(qNum, result) {
     setHistory(history);
 }
 
+// ===== ACTIVE QUESTION SET =====
+function getActiveQuestions() {
+    return activeQuestions || QUESTIONS;
+}
+
+function startDiffMode(mode, order) {
+    currentMode = mode;
+    orderMode = order || 'random';
+
+    if (mode === 'v22_new') {
+        activeQuestions = QUESTIONS_V22_NEW;
+        document.getElementById('card-mode-label').textContent = 'V22 新規問題';
+        document.getElementById('card-mode-label').style.background = '#d1fae5';
+        document.getElementById('card-mode-label').style.color = '#059669';
+    } else if (mode === 'v21_only') {
+        activeQuestions = QUESTIONS_V21_ONLY;
+        document.getElementById('card-mode-label').textContent = 'V21 削除問題';
+        document.getElementById('card-mode-label').style.background = '#fef3c7';
+        document.getElementById('card-mode-label').style.color = '#d97706';
+    }
+
+    const qs = getActiveQuestions();
+    deck = qs.map((q, i) => i);
+
+    if (orderMode === 'random') {
+        shuffleArray(deck);
+    }
+    deckIndex = 0;
+    isFlipped = false;
+
+    document.getElementById('btn-shuffle').style.display = '';
+    document.getElementById('btn-jump').style.display = 'none';
+    closeJumpInput();
+
+    showScreen('card-screen');
+    renderCard();
+}
+
 // ===== INIT =====
 function init() {
     updateHomeStats();
@@ -71,46 +111,51 @@ function init() {
 }
 
 function updateHomeStats() {
-    const mastered = getMastered();
-    const mistakes = getMistakes();
     const total = QUESTIONS.length;
-    const masteredCount = mastered.length;
-    const remaining = total - masteredCount;
 
     document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-mastered').textContent = masteredCount;
-    document.getElementById('stat-remaining').textContent = remaining;
 
-    const pct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
-    document.getElementById('progress-fill').style.width = pct + '%';
-    document.getElementById('progress-pct').textContent = pct + '%';
-
-    // Accuracy from history
+    // Calculate rates from history
     const history = getHistory();
-    let totalCorrect = 0, totalAttempts = 0;
+    let totalCorrect = 0, totalUnsure = 0, totalIncorrect = 0, totalAttempts = 0;
     Object.values(history).forEach(h => {
         totalCorrect += h.correct;
+        totalUnsure += h.unsure || 0;
+        totalIncorrect += h.incorrect;
         totalAttempts += h.correct + h.incorrect + (h.unsure || 0);
     });
+
     document.getElementById('stat-accuracy').textContent =
         totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) + '%' : '-';
+    document.getElementById('stat-unsure-rate').textContent =
+        totalAttempts > 0 ? Math.round((totalUnsure / totalAttempts) * 100) + '%' : '-';
+    document.getElementById('stat-incorrect-rate').textContent =
+        totalAttempts > 0 ? Math.round((totalIncorrect / totalAttempts) * 100) + '%' : '-';
+
+    // Progress bar: show attempted/total ratio
+    const attemptedCount = Object.keys(history).length;
+    const pct = total > 0 ? Math.round((attemptedCount / total) * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = pct + '%';
 
     // Update menu counts
     document.getElementById('count-all').textContent = total + '問';
     document.getElementById('count-all-seq').textContent = total + '問';
-    document.getElementById('count-mistakes').textContent = mistakes.length + '問';
+
+    // Update review mode filter counts
+    updateReviewFilterCounts();
+
+    // Update diff counts
+    if (typeof QUESTIONS_V22_NEW !== 'undefined') {
+        document.getElementById('count-v22-new').textContent = QUESTIONS_V22_NEW.length + '問';
+    }
+    if (typeof QUESTIONS_V21_ONLY !== 'undefined') {
+        document.getElementById('count-v21-only').textContent = QUESTIONS_V21_ONLY.length + '問';
+    }
 
     // Update glossary count
     if (typeof GLOSSARY !== 'undefined') {
         document.getElementById('count-glossary').textContent = GLOSSARY.length + '語';
-    }
-
-    // Disable mistakes button if no mistakes
-    const mistakesBtn = document.getElementById('btn-mistakes');
-    if (mistakes.length === 0) {
-        mistakesBtn.setAttribute('disabled', '');
-    } else {
-        mistakesBtn.removeAttribute('disabled');
     }
 }
 
@@ -121,6 +166,7 @@ function showScreen(id) {
 }
 
 function goHome() {
+    activeQuestions = null;
     updateHomeStats();
     updateResumeCard();
     showScreen('home-screen');
@@ -130,6 +176,7 @@ function goHome() {
 function startMode(mode, order) {
     currentMode = mode;
     orderMode = order || 'random';
+    activeQuestions = null; // reset to default QUESTIONS
     const mastered = getMastered();
     const mistakes = getMistakes();
 
@@ -143,11 +190,20 @@ function startMode(mode, order) {
         document.getElementById('card-mode-label').style.background = 'var(--accent-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--accent)';
     } else {
-        // Mistakes only
+        // Mistakes only - filtered by unsure/incorrect
+        const history = getHistory();
         deck = QUESTIONS
             .map((q, i) => i)
-            .filter(i => mistakes.includes(QUESTIONS[i].num) && !mastered.includes(QUESTIONS[i].num));
-        document.getElementById('card-mode-label').textContent = '復習モード';
+            .filter(i => {
+                const qNum = QUESTIONS[i].num;
+                if (!mistakes.includes(qNum) || mastered.includes(qNum)) return false;
+                const hist = history[qNum];
+                if (hist && hist.last === 'unsure') return reviewFilter.unsure;
+                return reviewFilter.incorrect;
+            });
+        const filterLabel = reviewFilter.unsure && reviewFilter.incorrect ? '復習モード'
+            : reviewFilter.unsure ? '復習（微妙のみ）' : '復習（不正解のみ）';
+        document.getElementById('card-mode-label').textContent = filterLabel;
         document.getElementById('card-mode-label').style.background = 'var(--orange-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--orange)';
     }
@@ -201,13 +257,14 @@ function closeJumpInput() {
 function jumpToQuestion() {
     const input = document.getElementById('jump-input');
     const num = parseInt(input.value, 10);
-    if (isNaN(num) || num < 1 || num > QUESTIONS.length) {
-        showToast(`1〜${QUESTIONS.length} の番号を入力してください`);
+    const qs = getActiveQuestions();
+    if (isNaN(num) || num < 1 || num > qs.length) {
+        showToast(`1〜${qs.length} の番号を入力してください`);
         return;
     }
 
     // Find the deck index for this question number
-    const targetDeckIndex = deck.findIndex(i => QUESTIONS[i].num === num);
+    const targetDeckIndex = deck.findIndex(i => qs[i].num === num);
     if (targetDeckIndex === -1) {
         showToast(`問題 ${num} は現在のデッキにありません（覚えた済み）`);
         return;
@@ -234,7 +291,7 @@ function renderCard() {
         return;
     }
 
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     const flashcard = document.getElementById('flashcard');
 
     // Reset flip
@@ -307,6 +364,15 @@ function renderCard() {
         document.getElementById('card-answer').textContent = '📋 シミュレーション問題';
     } else {
         document.getElementById('card-answer').textContent = `正解：${q.answer}`;
+    }
+
+    // Back - Answer Flag (suspected wrong answer)
+    const flagEl = document.getElementById('card-answer-flag');
+    if (q.answer_flag) {
+        flagEl.innerHTML = '<strong>⚠ 答えに誤りの可能性</strong><p>' + escapeHtml(q.answer_flag) + '</p>';
+        flagEl.style.display = '';
+    } else {
+        flagEl.style.display = 'none';
     }
 
     // Back - Explanation
@@ -394,17 +460,13 @@ function updateActionButtons(qNum) {
     const mistakeBtn = document.getElementById('btn-mark-mistake');
     const unsureBtn = document.getElementById('btn-mark-unsure');
 
-    if (mistakes.includes(qNum)) {
-        mistakeBtn.classList.add('active');
-    } else {
-        mistakeBtn.classList.remove('active');
-    }
+    // 不正解: active when in mistakes AND last result was 'incorrect' (or no history)
+    const isInMistakes = mistakes.includes(qNum);
+    const isIncorrect = isInMistakes && (!hist || hist.last === 'incorrect');
+    mistakeBtn.classList.toggle('active', isIncorrect);
 
-    if (hist && hist.last === 'unsure') {
-        unsureBtn.classList.add('active');
-    } else {
-        unsureBtn.classList.remove('active');
-    }
+    // 微妙: active when last result was 'unsure'
+    unsureBtn.classList.toggle('active', !!(hist && hist.last === 'unsure'));
 }
 
 // ===== CARD INTERACTIONS =====
@@ -431,16 +493,20 @@ function prevCard() {
 }
 
 function markMistake() {
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     const mistakes = getMistakes();
+    const hist = getHistory()[q.num];
 
-    if (mistakes.includes(q.num)) {
-        // Remove from mistakes
+    if (hist && hist.last === 'incorrect') {
+        // Already marked incorrect → toggle off
         setMistakes(mistakes.filter(n => n !== q.num));
+        showToast('不正解マークを解除しました');
     } else {
-        // Add to mistakes
-        mistakes.push(q.num);
-        setMistakes(mistakes);
+        // Mark as incorrect
+        if (!mistakes.includes(q.num)) {
+            mistakes.push(q.num);
+            setMistakes(mistakes);
+        }
         recordResult(q.num, 'incorrect');
         showToast('不正解を記録しました');
     }
@@ -449,7 +515,7 @@ function markMistake() {
 }
 
 function markMastered() {
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     const mastered = getMastered();
 
     if (mastered.includes(q.num)) {
@@ -485,7 +551,7 @@ function markMastered() {
 }
 
 function markCorrect() {
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     recordResult(q.num, 'correct');
 
     // Remove from mistakes if present
@@ -499,24 +565,31 @@ function markCorrect() {
 }
 
 function markUnsure() {
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     const mistakes = getMistakes();
+    const hist = getHistory()[q.num];
 
-    // Add to mistakes (for review mode) if not already there
-    if (!mistakes.includes(q.num)) {
-        mistakes.push(q.num);
-        setMistakes(mistakes);
+    if (hist && hist.last === 'unsure') {
+        // Already marked unsure → toggle off
+        setMistakes(mistakes.filter(n => n !== q.num));
+        showToast('微妙マークを解除しました');
+    } else {
+        // Mark as unsure
+        if (!mistakes.includes(q.num)) {
+            mistakes.push(q.num);
+            setMistakes(mistakes);
+        }
+        recordResult(q.num, 'unsure');
+        showToast('微妙を記録しました');
     }
 
-    recordResult(q.num, 'unsure');
     updateActionButtons(q.num);
-    showToast('微妙を記録しました');
 }
 
 // ===== COMPLETE SCREEN =====
 function showComplete() {
     const mastered = getMastered();
-    document.getElementById('complete-reviewed').textContent = QUESTIONS.length - deck.length;
+    document.getElementById('complete-reviewed').textContent = getActiveQuestions().length - deck.length;
     document.getElementById('complete-mastered').textContent = mastered.length;
 
     if (currentMode === 'mistakes') {
@@ -660,7 +733,7 @@ function showToast(msg) {
 
 // ===== SESSION / MEMO =====
 function saveSession() {
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     const session = {
         mode: currentMode,
         order: orderMode,
@@ -719,16 +792,41 @@ function resumeSession() {
     const mastered = getMastered();
     const mistakes = getMistakes();
 
+    activeQuestions = null; // default
+    if (session.mode === 'v22_new') {
+        activeQuestions = QUESTIONS_V22_NEW;
+    } else if (session.mode === 'v21_only') {
+        activeQuestions = QUESTIONS_V21_ONLY;
+    }
+    const qs = getActiveQuestions();
+
     if (session.mode === 'all') {
-        deck = QUESTIONS.map((q, i) => i)
-            .filter(i => !mastered.includes(QUESTIONS[i].num));
+        deck = qs.map((q, i) => i)
+            .filter(i => !mastered.includes(qs[i].num));
         const label = orderMode === 'sequential' ? '全問モード（順番）' : '全問モード（ランダム）';
         document.getElementById('card-mode-label').textContent = label;
         document.getElementById('card-mode-label').style.background = 'var(--accent-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--accent)';
+    } else if (session.mode === 'v22_new') {
+        deck = qs.map((q, i) => i);
+        document.getElementById('card-mode-label').textContent = 'V22 新規問題';
+        document.getElementById('card-mode-label').style.background = '#d1fae5';
+        document.getElementById('card-mode-label').style.color = '#059669';
+    } else if (session.mode === 'v21_only') {
+        deck = qs.map((q, i) => i);
+        document.getElementById('card-mode-label').textContent = 'V21 削除問題';
+        document.getElementById('card-mode-label').style.background = '#fef3c7';
+        document.getElementById('card-mode-label').style.color = '#d97706';
     } else {
-        deck = QUESTIONS.map((q, i) => i)
-            .filter(i => mistakes.includes(QUESTIONS[i].num) && !mastered.includes(QUESTIONS[i].num));
+        const history = getHistory();
+        deck = qs.map((q, i) => i)
+            .filter(i => {
+                const qNum = qs[i].num;
+                if (!mistakes.includes(qNum) || mastered.includes(qNum)) return false;
+                const hist = history[qNum];
+                if (hist && hist.last === 'unsure') return reviewFilter.unsure;
+                return reviewFilter.incorrect;
+            });
         document.getElementById('card-mode-label').textContent = '復習モード';
         document.getElementById('card-mode-label').style.background = 'var(--orange-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--orange)';
@@ -743,7 +841,7 @@ function resumeSession() {
     }
 
     // Find the saved question in deck
-    const targetIdx = deck.findIndex(i => QUESTIONS[i].num === session.qNum);
+    const targetIdx = deck.findIndex(i => qs[i].num === session.qNum);
     deckIndex = targetIdx !== -1 ? targetIdx : 0;
     isFlipped = false;
 
@@ -908,7 +1006,7 @@ async function requestAiExplanation(event) {
         return;
     }
 
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
     const btn = document.getElementById('ai-explain-btn');
     const loading = document.getElementById('ai-explain-loading');
     const response = document.getElementById('ai-explain-response');
@@ -1115,7 +1213,7 @@ async function sendFollowupQuestion(event) {
         return;
     }
 
-    const q = QUESTIONS[deck[deckIndex]];
+    const q = getActiveQuestions()[deck[deckIndex]];
 
     // Show loading
     sendBtn.disabled = true;
@@ -1272,6 +1370,107 @@ function renderGlossaryList() {
             `<p class="glossary-def">${escapeHtml(g.definition)}</p>`;
         listEl.appendChild(item);
     });
+}
+
+// ===== REVIEW FILTER =====
+function toggleReviewFilter(type) {
+    reviewFilter[type] = !reviewFilter[type];
+    // Ensure at least one is selected
+    if (!reviewFilter.unsure && !reviewFilter.incorrect) {
+        reviewFilter[type] = true;
+        showToast('少なくとも1つのフィルターを選択してください');
+        return;
+    }
+    updateReviewFilterUI();
+    updateReviewFilterCounts();
+}
+
+function updateReviewFilterUI() {
+    document.getElementById('filter-unsure-btn').classList.toggle('active', reviewFilter.unsure);
+    document.getElementById('filter-incorrect-btn').classList.toggle('active', reviewFilter.incorrect);
+}
+
+function updateReviewFilterCounts() {
+    const mistakes = getMistakes();
+    const mastered = getMastered();
+    const history = getHistory();
+
+    let unsureCount = 0, incorrectCount = 0;
+    mistakes.forEach(num => {
+        if (mastered.includes(num)) return;
+        const hist = history[num];
+        if (hist && hist.last === 'unsure') unsureCount++;
+        else incorrectCount++;
+    });
+
+    document.getElementById('count-filter-unsure').textContent = unsureCount;
+    document.getElementById('count-filter-incorrect').textContent = incorrectCount;
+
+    let totalCount = 0;
+    if (reviewFilter.unsure) totalCount += unsureCount;
+    if (reviewFilter.incorrect) totalCount += incorrectCount;
+    document.getElementById('count-mistakes').textContent = totalCount + '問';
+
+    const btn = document.getElementById('btn-mistakes');
+    if (totalCount === 0) {
+        btn.setAttribute('disabled', '');
+    } else {
+        btn.removeAttribute('disabled');
+    }
+}
+
+// ===== BACKUP / RESTORE =====
+function exportData() {
+    const data = {};
+    const keys = [LS_MASTERED, LS_MISTAKES, LS_HISTORY, LS_LAST_SESSION, LS_MEMO, LS_GEMINI_KEY, LS_GEMINI_MODEL];
+    keys.forEach(key => {
+        const val = localStorage.getItem(key);
+        if (val !== null) data[key] = val;
+    });
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sy0701_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('バックアップをダウンロードしました');
+}
+
+function importData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                const validKeys = [LS_MASTERED, LS_MISTAKES, LS_HISTORY, LS_LAST_SESSION, LS_MEMO, LS_GEMINI_KEY, LS_GEMINI_MODEL];
+                let count = 0;
+                validKeys.forEach(key => {
+                    if (data[key] !== undefined) {
+                        localStorage.setItem(key, data[key]);
+                        count++;
+                    }
+                });
+                updateHomeStats();
+                updateResumeCard();
+                initMemo();
+                showToast(count + '件のデータを復元しました');
+            } catch (err) {
+                showToast('ファイルの読み込みに失敗しました');
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
 }
 
 // ===== UTILS =====
