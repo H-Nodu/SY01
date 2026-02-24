@@ -101,6 +101,9 @@
 
                 <div class="menu-group-label" style="margin-top: 8px;">復習モード</div>
                 <div class="review-filter-row" id="review-filter-row">
+                    <button class="review-filter-btn" id="filter-correct-btn" onclick="toggleReviewFilter('correct')">
+                        <span class="review-filter-icon">○</span> 正解 <span class="review-filter-count" id="count-filter-correct">0</span>問
+                    </button>
                     <button class="review-filter-btn active" id="filter-unsure-btn" onclick="toggleReviewFilter('unsure')">
                         <span class="review-filter-icon">△</span> 微妙 <span class="review-filter-count" id="count-filter-unsure">0</span>問
                     </button>

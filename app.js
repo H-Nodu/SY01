@@ -5,7 +5,7 @@ let deck = [];                 // current set of question indices
 let deckIndex = 0;             // position in deck
 let isFlipped = false;
 let activeQuestions = null;    // reference to current question set (null = QUESTIONS)
-let reviewFilter = { unsure: true, incorrect: true };
+let reviewFilter = { correct: false, unsure: true, incorrect: true };
 
 // LocalStorage keys
 const LS_MASTERED = 'sy0701_mastered';
@@ -190,19 +190,32 @@ function startMode(mode, order) {
         document.getElementById('card-mode-label').style.background = 'var(--accent-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--accent)';
     } else {
-        // Mistakes only - filtered by unsure/incorrect
+        // Review mode - filtered by correct/unsure/incorrect
         const history = getHistory();
         deck = QUESTIONS
             .map((q, i) => i)
             .filter(i => {
                 const qNum = QUESTIONS[i].num;
-                if (!mistakes.includes(qNum) || mastered.includes(qNum)) return false;
+                if (mastered.includes(qNum)) return false;
                 const hist = history[qNum];
-                if (hist && hist.last === 'unsure') return reviewFilter.unsure;
-                return reviewFilter.incorrect;
+                const inMistakes = mistakes.includes(qNum);
+
+                // Correct: has history with last='correct' and NOT in mistakes
+                if (!inMistakes && hist && hist.last === 'correct') return reviewFilter.correct;
+                // Unsure: in mistakes and last='unsure'
+                if (inMistakes && hist && hist.last === 'unsure') return reviewFilter.unsure;
+                // Incorrect: in mistakes and (last='incorrect' or no history)
+                if (inMistakes) return reviewFilter.incorrect;
+
+                return false;
             });
-        const filterLabel = reviewFilter.unsure && reviewFilter.incorrect ? '復習モード'
-            : reviewFilter.unsure ? '復習（微妙のみ）' : '復習（不正解のみ）';
+        const activeFilters = [
+            reviewFilter.correct ? '正解' : '',
+            reviewFilter.unsure ? '微妙' : '',
+            reviewFilter.incorrect ? '不正解' : ''
+        ].filter(Boolean);
+        const filterLabel = activeFilters.length === 3 ? '復習モード'
+            : '復習（' + activeFilters.join('・') + '）';
         document.getElementById('card-mode-label').textContent = filterLabel;
         document.getElementById('card-mode-label').style.background = 'var(--orange-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--orange)';
@@ -822,10 +835,13 @@ function resumeSession() {
         deck = qs.map((q, i) => i)
             .filter(i => {
                 const qNum = qs[i].num;
-                if (!mistakes.includes(qNum) || mastered.includes(qNum)) return false;
+                if (mastered.includes(qNum)) return false;
                 const hist = history[qNum];
-                if (hist && hist.last === 'unsure') return reviewFilter.unsure;
-                return reviewFilter.incorrect;
+                const inMistakes = mistakes.includes(qNum);
+                if (!inMistakes && hist && hist.last === 'correct') return reviewFilter.correct;
+                if (inMistakes && hist && hist.last === 'unsure') return reviewFilter.unsure;
+                if (inMistakes) return reviewFilter.incorrect;
+                return false;
             });
         document.getElementById('card-mode-label').textContent = '復習モード';
         document.getElementById('card-mode-label').style.background = 'var(--orange-soft)';
@@ -1376,7 +1392,7 @@ function renderGlossaryList() {
 function toggleReviewFilter(type) {
     reviewFilter[type] = !reviewFilter[type];
     // Ensure at least one is selected
-    if (!reviewFilter.unsure && !reviewFilter.incorrect) {
+    if (!reviewFilter.correct && !reviewFilter.unsure && !reviewFilter.incorrect) {
         reviewFilter[type] = true;
         showToast('少なくとも1つのフィルターを選択してください');
         return;
@@ -1386,6 +1402,7 @@ function toggleReviewFilter(type) {
 }
 
 function updateReviewFilterUI() {
+    document.getElementById('filter-correct-btn').classList.toggle('active', reviewFilter.correct);
     document.getElementById('filter-unsure-btn').classList.toggle('active', reviewFilter.unsure);
     document.getElementById('filter-incorrect-btn').classList.toggle('active', reviewFilter.incorrect);
 }
@@ -1394,8 +1411,11 @@ function updateReviewFilterCounts() {
     const mistakes = getMistakes();
     const mastered = getMastered();
     const history = getHistory();
+    const allNums = QUESTIONS.map(q => q.num);
 
-    let unsureCount = 0, incorrectCount = 0;
+    let correctCount = 0, unsureCount = 0, incorrectCount = 0;
+
+    // Count unsure/incorrect from mistakes list
     mistakes.forEach(num => {
         if (mastered.includes(num)) return;
         const hist = history[num];
@@ -1403,10 +1423,19 @@ function updateReviewFilterCounts() {
         else incorrectCount++;
     });
 
+    // Count correct from history (questions with last='correct' that are not in mistakes/mastered)
+    allNums.forEach(num => {
+        if (mastered.includes(num) || mistakes.includes(num)) return;
+        const hist = history[num];
+        if (hist && hist.last === 'correct') correctCount++;
+    });
+
+    document.getElementById('count-filter-correct').textContent = correctCount;
     document.getElementById('count-filter-unsure').textContent = unsureCount;
     document.getElementById('count-filter-incorrect').textContent = incorrectCount;
 
     let totalCount = 0;
+    if (reviewFilter.correct) totalCount += correctCount;
     if (reviewFilter.unsure) totalCount += unsureCount;
     if (reviewFilter.incorrect) totalCount += incorrectCount;
     document.getElementById('count-mistakes').textContent = totalCount + '問';
