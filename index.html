@@ -123,6 +123,35 @@
                     </div>
                     <div class="menu-card-count" id="count-mistakes">0問</div>
                 </button>
+
+                <div class="menu-group-label" style="margin-top: 8px;">累計履歴で復習</div>
+                <button class="menu-card" id="btn-ever-incorrect" onclick="startMode('ever_incorrect')" style="border-left: 3px solid #dc2626;">
+                    <div class="menu-card-icon" style="color: #dc2626;">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="2"/>
+                            <path d="M12 12l8 8M20 12l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="menu-card-text">
+                        <span class="menu-card-title">不正解履歴</span>
+                        <span class="menu-card-sub">過去に一度でも不正解にした問題</span>
+                    </div>
+                    <div class="menu-card-count" id="count-ever-incorrect">0問</div>
+                </button>
+                <button class="menu-card" id="btn-ever-unsure" onclick="startMode('ever_unsure')" style="border-left: 3px solid #d97706;">
+                    <div class="menu-card-icon" style="color: #d97706;">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="2"/>
+                            <path d="M13 13c0-1.7 1.3-3 3-3s3 1.3 3 3c0 1.2-.7 2.2-1.7 2.6-.5.2-.8.6-.8 1.1V19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="16" cy="22" r="1" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="menu-card-text">
+                        <span class="menu-card-title">微妙履歴</span>
+                        <span class="menu-card-sub">過去に微妙にしたが不正解はない問題</span>
+                    </div>
+                    <div class="menu-card-count" id="count-ever-unsure">0問</div>
+                </button>
             </div>
 
             <div class="menu-cards">

@@ -1,5 +1,5 @@
 // ===== STATE =====
-let currentMode = 'all';       // 'all' | 'mistakes' | 'v22_new' | 'v21_only'
+let currentMode = 'all';       // 'all' | 'mistakes' | 'ever_incorrect' | 'ever_unsure' | 'v22_new' | 'v21_only'
 let orderMode = 'random';      // 'random' | 'sequential'
 let deck = [];                 // current set of question indices
 let deckIndex = 0;             // position in deck
@@ -175,7 +175,7 @@ function goHome() {
 // ===== START MODE =====
 function startMode(mode, order) {
     currentMode = mode;
-    orderMode = order || 'random';
+    orderMode = (mode === 'mistakes' || mode === 'ever_incorrect' || mode === 'ever_unsure') ? 'sequential' : (order || 'random');
     activeQuestions = null; // reset to default QUESTIONS
     const mastered = getMastered();
     const mistakes = getMistakes();
@@ -189,6 +189,34 @@ function startMode(mode, order) {
         document.getElementById('card-mode-label').textContent = label;
         document.getElementById('card-mode-label').style.background = 'var(--accent-soft)';
         document.getElementById('card-mode-label').style.color = 'var(--accent)';
+    } else if (mode === 'ever_incorrect') {
+        // Questions ever marked incorrect
+        const history = getHistory();
+        deck = QUESTIONS
+            .map((q, i) => i)
+            .filter(i => {
+                const qNum = QUESTIONS[i].num;
+                if (mastered.includes(qNum)) return false;
+                const hist = history[qNum];
+                return hist && hist.incorrect > 0;
+            });
+        document.getElementById('card-mode-label').textContent = '不正解履歴';
+        document.getElementById('card-mode-label').style.background = '#fee2e2';
+        document.getElementById('card-mode-label').style.color = '#dc2626';
+    } else if (mode === 'ever_unsure') {
+        // Questions ever marked unsure but NEVER marked incorrect
+        const history = getHistory();
+        deck = QUESTIONS
+            .map((q, i) => i)
+            .filter(i => {
+                const qNum = QUESTIONS[i].num;
+                if (mastered.includes(qNum)) return false;
+                const hist = history[qNum];
+                return hist && hist.unsure > 0 && (!hist.incorrect || hist.incorrect === 0);
+            });
+        document.getElementById('card-mode-label').textContent = '微妙履歴';
+        document.getElementById('card-mode-label').style.background = '#fef3c7';
+        document.getElementById('card-mode-label').style.color = '#d97706';
     } else {
         // Review mode - filtered by correct/unsure/incorrect
         const history = getHistory();
@@ -605,7 +633,7 @@ function showComplete() {
     document.getElementById('complete-reviewed').textContent = getActiveQuestions().length - deck.length;
     document.getElementById('complete-mastered').textContent = mastered.length;
 
-    if (currentMode === 'mistakes') {
+    if (currentMode === 'mistakes' || currentMode === 'ever_incorrect' || currentMode === 'ever_unsure') {
         document.getElementById('complete-message').textContent = '復習カードをすべて確認しました！';
     } else {
         document.getElementById('complete-message').textContent = 'すべてのカードを確認しました！';
@@ -785,6 +813,8 @@ function updateResumeCard() {
     }
 
     const modeLabel = session.mode === 'mistakes' ? '復習モード'
+        : session.mode === 'ever_incorrect' ? '不正解履歴'
+        : session.mode === 'ever_unsure' ? '微妙履歴'
         : session.order === 'sequential' ? '全問・順番' : '全問・ランダム';
     const qLabel = `QUESTION ${String(session.qNum).padStart(3, '0')}`;
     const timeAgo = formatTimeAgo(session.time);
@@ -801,7 +831,7 @@ function resumeSession() {
 
     // Start the mode
     currentMode = session.mode;
-    orderMode = session.order || 'random';
+    orderMode = (session.mode === 'mistakes' || session.mode === 'ever_incorrect' || session.mode === 'ever_unsure') ? 'sequential' : (session.order || 'random');
     const mastered = getMastered();
     const mistakes = getMistakes();
 
@@ -828,6 +858,30 @@ function resumeSession() {
     } else if (session.mode === 'v21_only') {
         deck = qs.map((q, i) => i);
         document.getElementById('card-mode-label').textContent = 'V21 削除問題';
+        document.getElementById('card-mode-label').style.background = '#fef3c7';
+        document.getElementById('card-mode-label').style.color = '#d97706';
+    } else if (session.mode === 'ever_incorrect') {
+        const history = getHistory();
+        deck = qs.map((q, i) => i)
+            .filter(i => {
+                const qNum = qs[i].num;
+                if (mastered.includes(qNum)) return false;
+                const hist = history[qNum];
+                return hist && hist.incorrect > 0;
+            });
+        document.getElementById('card-mode-label').textContent = '不正解履歴';
+        document.getElementById('card-mode-label').style.background = '#fee2e2';
+        document.getElementById('card-mode-label').style.color = '#dc2626';
+    } else if (session.mode === 'ever_unsure') {
+        const history = getHistory();
+        deck = qs.map((q, i) => i)
+            .filter(i => {
+                const qNum = qs[i].num;
+                if (mastered.includes(qNum)) return false;
+                const hist = history[qNum];
+                return hist && hist.unsure > 0 && (!hist.incorrect || hist.incorrect === 0);
+            });
+        document.getElementById('card-mode-label').textContent = '微妙履歴';
         document.getElementById('card-mode-label').style.background = '#fef3c7';
         document.getElementById('card-mode-label').style.color = '#d97706';
     } else {
@@ -1445,6 +1499,35 @@ function updateReviewFilterCounts() {
         btn.setAttribute('disabled', '');
     } else {
         btn.removeAttribute('disabled');
+    }
+
+    // Count ever-incorrect and ever-unsure (excluding mastered)
+    let everIncorrectCount = 0, everUnsureCount = 0;
+    allNums.forEach(num => {
+        if (mastered.includes(num)) return;
+        const hist = history[num];
+        if (!hist) return;
+        if (hist.incorrect > 0) {
+            everIncorrectCount++;
+        } else if (hist.unsure > 0) {
+            everUnsureCount++;
+        }
+    });
+
+    document.getElementById('count-ever-incorrect').textContent = everIncorrectCount + '問';
+    const btnEverIncorrect = document.getElementById('btn-ever-incorrect');
+    if (everIncorrectCount === 0) {
+        btnEverIncorrect.setAttribute('disabled', '');
+    } else {
+        btnEverIncorrect.removeAttribute('disabled');
+    }
+
+    document.getElementById('count-ever-unsure').textContent = everUnsureCount + '問';
+    const btnEverUnsure = document.getElementById('btn-ever-unsure');
+    if (everUnsureCount === 0) {
+        btnEverUnsure.setAttribute('disabled', '');
+    } else {
+        btnEverUnsure.removeAttribute('disabled');
     }
 }
 
